@@ -29,24 +29,24 @@ class _graphFront(nn.Module):
 
     def build_graph(self, rois):
         num_frames = len(rois)
-        adjacent_matrix = torch.zeros((num_frames*100, num_frames*100))
+        adjacent_matrix = torch.zeros((num_frames*20, num_frames*20))
         for t in range(num_frames-1):
             roi_t = rois[t]
             roi_t1 = rois[t+1]
             for i in range(len(roi_t)):
                 for j in range(len(roi_t+1)):
-                    adjacent_matrix[100*(t-1)+i][100*(t-1)+j] = self.IoU(roi_t[i], roi_t1[j])
-        return adjacent_matrix.view(1,num_frames*100,num_frames*100)
+                    adjacent_matrix[20*(t-1)+i][20*(t-1)+j] = self.IoU(roi_t[i], roi_t1[j])
+        return adjacent_matrix.view(1,num_frames*20,num_frames*20)
 
     def gcn(self, rois):
         num_frames = len(rois)
-        adjacent_matrix = torch.zeros((num_frames*100,num_frames*100))
+        adjacent_matrix = torch.zeros((num_frames*20,num_frames*20))
         for t in range(num_frames-1):
             roi_t = rois[t]
             roi_t1 = rois[t+1]
             for i in range(len(roi_t)):
                 for j in range(len(roi_t+1)):
-                    adjacent_matrix[100*(t-1)+i][100*(t-1)+j] = self.IoU(roi_t[i], roi_t1[j])
+                    adjacent_matrix[20*(t-1)+i][20*(t-1)+j] = self.IoU(roi_t[i], roi_t1[j])
         return adjacent_matrix
 
 # class _graphFront(nn.Module):
@@ -67,9 +67,9 @@ class _graphFront(nn.Module):
 #         return iou
 
 # s = _graphFront()
-# datadir = "/data/dataset/something-somthing-v2/result/10058/"
+# datadir = "/data/dataset/something-somthing-v2/result/2058/"
 # num_frames = len(os.listdir(datadir))
-# node = np.zeros((num_frames*100,num_frames*100))
+# node = np.zeros((num_frames*20,num_frames*20))
 #
 # for t in range(1,num_frames):
 #     print(os.path.join(datadir,"%06d" % t + '_det.txt'))
@@ -86,7 +86,7 @@ class _graphFront(nn.Module):
 #                      itemt1 = [float(x) for x in objects_t1[j].strip().split(' ')]
 #                      # print(itemt)
 #                      # print(itemt1)
-#                      node[100*(t-1)+i][100*(t-1)+j] = s.IOU(itemt,itemt1)
+#                      node[20*(t-1)+i][20*(t-1)+j] = s.IOU(itemt,itemt1)
 #
 # print(node)
 # print(node.shape)

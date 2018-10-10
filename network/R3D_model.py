@@ -64,13 +64,13 @@ class SpatioTemporalResBlocka(nn.Module):
 
         # to allow for SAME padding
         if self.downsample:
-            self.conv1a = SpatioTemporalConv(in_channels, out_channels[0], kernel_size=(3,1,1), padding=(1,0,0), stride=(1,2,2))
-            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(1,3,3), padding=(0,1,1))
+            self.conv1a = SpatioTemporalConv(in_channels, out_channels[0], kernel_size=(1,1,1), padding=(0,0,0))
+            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(3,3,3), padding=(1,1,1), stride=(1,2,2))
             self.conv1c = SpatioTemporalConv(out_channels[0], out_channels[1], kernel_size=(1,1,1), padding=(0,0,0))
             self.conv2 = SpatioTemporalConv(in_channels, out_channels[1], kernel_size=(1,1,1), padding=(0,0,0),stride=(1,2,2))
         else:
-            self.conv1a = SpatioTemporalConv(in_channels, out_channels[0], kernel_size=(3,1,1), stride=(1,1,1), padding=(1,0,0))
-            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(1,3,3), padding=(0,1,1))
+            self.conv1a = SpatioTemporalConv(in_channels, out_channels[0], kernel_size=(1,1,1), padding=(0,0,0))
+            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(3,3,3), padding=(1,1,1), stride=(1,1,1))
             self.conv1c = SpatioTemporalConv(out_channels[0], out_channels[1], kernel_size=(1,1,1), padding=(0,0,0))
             self.conv2 = SpatioTemporalConv(in_channels, out_channels[1], kernel_size=(1,1,1), padding=(0,0,0),stride=(1,1,1))
         # self.bn2 = nn.BatchNorm3d(out_channels)
@@ -115,12 +115,12 @@ class SpatioTemporalResBlock(nn.Module):
             # self.downsamplebn = nn.BatchNorm3d(out_channels)
 
             # downsample with stride = 2 when producing the residual
-            self.conv1a = SpatioTemporalConv(in_channels, out_channels[0], kernel_size=(3,1,1), padding=(1,0,0), stride=(1,2,2))
-            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(1,3,3), padding=(0,1,1))
+            self.conv1a = SpatioTemporalConv(in_channels, out_channels[0], kernel_size=(1,1,1), padding=(0,0,0), stride=(1,2,2))
+            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(3,3,3), padding=(1,1,1))
             self.conv1c = SpatioTemporalConv(out_channels[0], out_channels[1], kernel_size=(1,1,1), padding=(0,0,0))
         else:
-            self.conv1a = SpatioTemporalConv(out_channels[1], out_channels[0], kernel_size=(3,1,1), stride=(1,1,1), padding=(1,0,0))
-            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(1,3,3), padding=(0,1,1))
+            self.conv1a = SpatioTemporalConv(out_channels[1], out_channels[0], kernel_size=(1,1,1), stride=(1,1,1), padding=(0,0,0))
+            self.conv1b = SpatioTemporalConv(out_channels[0], out_channels[0], kernel_size=(3,3,3), padding=(1,1,1))
             self.conv1c = SpatioTemporalConv(out_channels[0], out_channels[1], kernel_size=(1,1,1), padding=(0,0,0))
 
         self.conv2 = SpatioTemporalConv(in_channels, out_channels[1], kernel_size=(1,1,1), padding=(0,0,0),stride=(1,2,2))
@@ -183,7 +183,7 @@ class R3DNet(nn.Module):
             block_type (Module, optional): Type of block that is to be used to form the layers. Default: SpatioTemporalResBlock.
     """
 
-    def __init__(self, layer_sizes, block_type=SpatioTemporalResBlock):
+    def __init__(self, num_classes, layer_sizes, block_type=SpatioTemporalResBlock):
         super(R3DNet, self).__init__()
 
         # first conv, with stride 1x2x2 and kernel size 3x7x7
@@ -198,12 +198,20 @@ class R3DNet(nn.Module):
         # inside the first block
         self.conv3 = SpatioTemporalResLayer(in_channels=256, out_channels=(128, 512), layer_size=layer_sizes[1], block_type=block_type, downsample=True)
         self.conv4 = SpatioTemporalResLayer(in_channels=512, out_channels=(256, 1024), layer_size=layer_sizes[2], block_type=block_type, downsample=True)
-        self.conv5 = SpatioTemporalResLayer(in_channels=1024, out_channels=(512, 2048), layer_size=layer_sizes[3], block_type=block_type, downsample=False)
+        self.conv5 = SpatioTemporalResLayer(in_channels=1024, out_channels=(512, 2048), layer_size=layer_sizes[3], block_type=block_type, downsample=True)
 
         # global average pooling of the output
         self.pool = nn.AdaptiveAvgPool3d(1)
+        self.linear = nn.Linear(2560, num_classes)
 
-    def forward(self, x):
+        self.RCNN_roi_align = RoIAlignAvg(7, 7, 1.0/16.0)
+        self.pool = nn.AdaptiveAvgPool3d(1)
+        self.graph = _graphFront()
+        self.gcn1 = ConvTemporalGraphical(2048, 512, 1)
+        self.gcn2 = ConvTemporalGraphical(512, 512, 1)
+
+    def forward(self, x, bbox):
+        print("R3Dx", x.device)
         x = self.conv1(x)
         x = self.pool1(x)
         x = self.conv2(x)
@@ -211,7 +219,56 @@ class R3DNet(nn.Module):
         x = self.conv3(x)
         x = self.conv4(x)
         x = self.conv5(x)
-        return x
+
+        x_avg = self.pool(x).squeeze(2).squeeze(2).squeeze(2)
+
+        print(bbox.shape)
+
+        [N,C,T,H,W] = x.shape
+        x = x.permute(0,2,1,3,4).contiguous().view(-1,C,H,W)
+
+        video_pooled_feat = torch.zeros((N*T,20,2048,7,7))
+        bbox = bbox[:,:8,:,:]
+        bbox = bbox.view(-1,20,5)[:32,:,:]
+
+        # grid_xy = _affine_grid_gen(rois.view(-1, 5), base_feat.size()[2:], self.grid_size)
+        # grid_yx = torch.stack([grid_xy.data[:,:,:,1], grid_xy.data[:,:,:,0]], 3).contiguous()
+        # cropped_feat = self.RCNN_roi_crop(base_feat, Variable(grid_yx).detach())
+        # global_pooled_feat = F.adaptive_max_pool2d(cropped_feat, (1, 1))
+        # global_pooled_feat = global_pooled_feat.squeeze(2).squeeze(2)
+        print("bbox.shape", bbox.shape)
+        print("R3Dx", x.device)
+        for i in range(bbox.shape[0]):
+           video_pooled_feat[i] = self.RCNN_roi_align(x[i].view(1,C,H,W), bbox[i]) #(N*T,100,d,7,7)
+        video_pooled_feat = video_pooled_feat.cuda()
+        print("video_pooled_feat", video_pooled_feat.device)
+
+        #nkctv,kvw->nctw
+        #[32, 100, 2048, 7, 7]
+        video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,2048,7,7), (1, 1)).squeeze(2).squeeze(2).view(T,20,C)  #[1600, 2048, 1, 1]
+        print("video_pooled_feat", type(video_pooled_feat))
+
+        adjacent_matrix = torch.randn(N, T*20,T*20)
+
+        adjacent_matrix[0] = self.graph.build_graph(bbox)
+        adjacent_matrix = adjacent_matrix.cuda()
+
+        print('adjacent',adjacent_matrix)  #(N,800,800)
+        video_pooled_feat = video_pooled_feat.view(N, 2048, -1)
+        print("video_pooled_feat",video_pooled_feat)
+
+        node,A = self.gcn1(video_pooled_feat, adjacent_matrix)  #
+        node,A = self.gcn2(node, A)
+
+        node = node.squeeze(0).view(512,-1).permute(1,0)
+
+        node = torch.mean(node,0).view(1,-1)
+
+        feat = torch.cat((x_avg,node),dim=1)
+
+        logits = self.linear(feat)
+
+        return logits
 
 
 
@@ -230,76 +287,80 @@ class R3DClassifier(nn.Module):
     def __init__(self, num_classes, layer_sizes, block_type=SpatioTemporalResBlock, pretrained=False):
         super(R3DClassifier, self).__init__()
 
-        self.res3d = R3DNet(layer_sizes, block_type)
+        self.res3d = R3DNet(num_classes, layer_sizes, block_type)
 
-        self.RCNN_roi_align = RoIAlignAvg(7, 7, 1.0/16.0)
+        # self.RCNN_roi_align = RoIAlignAvg(7, 7, 1.0/16.0)
 
-        self.linear = nn.Linear(2560, num_classes)
+        # self.linear = nn.Linear(2048, num_classes)
 
-        self.pool = nn.AdaptiveAvgPool3d(1)
+        # self.pool = nn.AdaptiveAvgPool3d(1)
 
-        self.graph = _graphFront()
+        # self.graph = _graphFront()
 
-        self.gcn1 = ConvTemporalGraphical(2048, 512, 1)
-        self.gcn2 = ConvTemporalGraphical(512, 512, 1)
+        # self.gcn1 = ConvTemporalGraphical(2048, 512, 1)
+        # self.gcn2 = ConvTemporalGraphical(512, 512, 1)
         self.__init_weight()
 
         if pretrained:
             self.__load_pretrained_weights()
 
     def forward(self, x, bbox):
-        x = self.res3d(x)
+        x = self.res3d(x, bbox)
         print(x.shape)  #torch.Size([1, 2048, 16, 14, 14]) 4, 2048, 8, 14, 14
-        x_avgpool = self.pool(x).squeeze(2).squeeze(2).squeeze(2)
-        print("x_avgpool",x_avgpool.shape) #([4, 2048])
+        # x_avgpool = self.pool(x).squeeze(2).squeeze(2).squeeze(2)
+        # print("x_avgpool",x_avgpool.shape) #([4, 2048])
 
-        [N,C,T,H,W] = x.shape
-        print(N,C,T,H,W)
-        print(x.permute(0,2,1,3,4).shape)
-        x = x.permute(0,2,1,3,4).contiguous().view(-1,C,H,W)
-        #print(x.view(-1,C,H,W))
-        #print('permute',x.permute(0,2,1,3,4).view(-1,C,H,W).shape)  #[16, 2048, 14, 14]
+        # [N,C,T,H,W] = x.shape
+        # print(N,C,T,H,W)
+        # print(x.permute(0,2,1,3,4).shape)
+        # x = x.permute(0,2,1,3,4).contiguous().view(-1,C,H,W)
+        # #print(x.view(-1,C,H,W))
+        # #print('permute',x.permute(0,2,1,3,4).view(-1,C,H,W).shape)  #[16, 2048, 14, 14]
+        #
+        # print(bbox.view(-1,100,4).shape)  #[16, 100, 4]
+        # #video_pooled_feat = self.RCNN_roi_align(x.permute(0,2,1,3,4).view(-1,C,H,W), bbox.view(-1,4)) #(N*T,100,d,7,7)
+        #
+        # video_pooled_feat = torch.zeros((N*T,100,2048,7,7))
+        # print("video",video_pooled_feat.shape)
+        # print(bbox.shape)
+        # bbox = bbox[:,:8,:,:]
+        # bbox = bbox.view(-1,100,4)[:32,:,:]
+        #
+        # for i in range(bbox.shape[0]):
+        #    video_pooled_feat[i] = self.RCNN_roi_align(x[i].view(1,C,H,W), bbox[i]) #(N*T,100,d,7,7)
+        #
+        # print("video",video_pooled_feat.shape)  #[1600, 2048, 7, 7]
+        #
+        # #nkctv,kvw->nctw
+        # #[32, 100, 2048, 7, 7]
+        # video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,2048,7,7), (1, 1)).squeeze(2).squeeze(2).view(T,100,C)  #[1600, 2048, 1, 1]
+        # print(video_pooled_feat.shape)
+        #
+        # adjacent_matrix = torch.randn(N, T*100,T*100)
+        # print("bbox.shape",bbox.shape)
+        # #for i in range(bbox.shape[0]):
+        # adjacent_matrix[0] = self.graph.build_graph(bbox)
+        #
+        # print('adjacent',adjacent_matrix.shape)  #(N,800,800)
+        # video_pooled_feat = video_pooled_feat.view(N,2048,1,-1)
+        # #video_pooled_feat = video_pooled_feat.view(N,T,C,-1).permute(0,2,1,3)  #1, 1, 16, 2048, 100
+        # print("video_pooled_feat",video_pooled_feat.shape)
+        #
+        # node,A = self.gcn1(video_pooled_feat, adjacent_matrix)  #
+        # node,A = self.gcn2(node, A)
+        #
+        # node = node.squeeze(0).view(512,-1).permute(1,0)
+        # print("node",node.shape)  #[1, 512, 16, 100]
+        #
+        # node = torch.mean(node,0).view(1,-1)
+        # print("node",node.shape)
+        #
+        # feat = torch.cat((x_avgpool,node),dim=1)
+        #
+        # logits = self.linear(feat)
+        # logits = self.linear(x_avgpool)
 
-        print(bbox.view(-1,100,4).shape)  #[16, 100, 4]
-        #video_pooled_feat = self.RCNN_roi_align(x.permute(0,2,1,3,4).view(-1,C,H,W), bbox.view(-1,4)) #(N*T,100,d,7,7)
-        video_pooled_feat = torch.zeros((N*T,100,2048,7,7))
-        print("video",video_pooled_feat.shape)
-        print(bbox.shape)
-        adjacent_bbox = bbox[:,:8,:,:]
-        bbox = bbox.view(-1,100,4)[:32,:,:]
-        for i in range(bbox.shape[0]):
-            video_pooled_feat[i] = self.RCNN_roi_align(x[i].view(1,C,H,W), bbox[i]) #(N*T,100,d,7,7)
-
-        print("video",video_pooled_feat.shape)  #[1600, 2048, 7, 7]
-
-        #nkctv,kvw->nctw
-        #[32, 100, 2048, 7, 7]
-        video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,2048,7,7), (1, 1)).squeeze(2).squeeze(2).view(32,100,2048)  #[1600, 2048, 1, 1]
-        print(video_pooled_feat.shape)
-        
-        adjacent_matrix = torch.randn(bbox.shape[0],1,T*100,T*100) 
-        for i in range(bbox.shape[0]):
-            adjacent_matrix[i] = self.graph.build_graph(bbox[i])
-
-        print('adjacent',adjacent_matrix.shape)
-        video_pooled_feat = video_pooled_feat.view(N,1,2048,1,-1)
-        #video_pooled_feat = video_pooled_feat.view(N,T,C,-1).permute(0,2,1,3)  #1, 1, 16, 2048, 100
-        print("video_pooled_feat",video_pooled_feat.shape)
-
-        node,A = self.gcn1(video_pooled_feat, adjacent_matrix)  #
-        node,A = self.gcn2(node, A)
-
-        node = node.squeeze(0).view(512,-1).permute(1,0)
-        print("node",node.shape)  #[1, 512, 16, 100]
-
-        node = torch.mean(node,0).view(1,-1)
-        print("node",node.shape)
-
-        feat = torch.cat((x_avgpool,node),dim=1)
-
-        logits = self.linear(feat)
-
-        return logits
+        return x
 
     def __load_pretrained_weights(self):
         s_dict = self.state_dict()

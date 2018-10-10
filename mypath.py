@@ -8,7 +8,7 @@ class Path(object):
             # Save preprocess data into output_dir
             output_dir = '/data/dataset/VAR/UCF-5/'
 
-            bbox_output_dir = '/data/dataset/UCF-101-result/UCF-5/'
+            bbox_output_dir = '/data/dataset/UCF-101-result/UCF-5-20/'
 
             return root_dir, output_dir, bbox_output_dir
         elif database == 'hmdb51':

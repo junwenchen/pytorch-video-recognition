@@ -12,11 +12,15 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 
 from dataloaders.dataset import VideoDataset
-from network import C3D_model, R2Plus1D_model, R3D_model
+from network import C3D_model, R2Plus1D_model, R3D_model, resnet
 #from network.model.graph_front import _graphFront
+#torch.backends.cudnn.benchmark = True
 
 # Use GPU if available else revert to CPU
+# torch.cuda.set_device(0)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cpu")
+#torch.backends.cudnn.benchmark = False
 print("Device being used:", device)
 
 nEpochs = 100  # Number of epochs for training
@@ -71,6 +75,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                         {'params': R2Plus1D_model.get_10x_lr_params(model), 'lr': lr * 10}]
     elif modelName == 'R3D':
         model = R3D_model.R3DClassifier(num_classes=num_classes, layer_sizes=(3, 4, 6, 3))
+        #model = resnet.ResNet(num_classes=num_classes, layers=(3, 4, 6, 3), sample_size=224, sample_duration=16)
         train_params = model.parameters()
     else:
         print('We only implemented C3D and R2Plus1D models.')
@@ -98,10 +103,10 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
     writer = SummaryWriter(log_dir=log_dir)
 
     print('Training model on {} dataset...'.format(dataset))
-    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16), batch_size=2, shuffle=True, \
+    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16), batch_size=1, shuffle=True, \
                                   num_workers=8)
-    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=2, num_workers=8)
-    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=2, num_workers=8)
+    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=1, num_workers=8)
+    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=1, num_workers=8)
 
     trainval_loaders = {'train': train_dataloader, 'val': val_dataloader}
     trainval_sizes = {x: len(trainval_loaders[x].dataset) for x in ['train', 'val']}
@@ -125,23 +130,30 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             else:
                 model.eval()
 
+            torch.backends.cudnn.benchmark=False
             for inputs, bbox_inputs, labels in tqdm(trainval_loaders[phase]):
                 # move inputs and labels to the device the training is taking place on
                 inputs = Variable(inputs, requires_grad=True).to(device)
                 bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
                 labels = Variable(labels).to(device)
                 optimizer.zero_grad()
-
-                #print(input.size())
+#                torch.backends.cudnn.benchmark = False
+                print("inputs.device",inputs.device)
                 if phase == 'train':
-                    outputs = model(inputs,bbox_inputs)
+                    outputs = model(inputs, bbox_inputs)
+                    # outputs = model(inputs)
                 else:
                     with torch.no_grad():
                         outputs = model(inputs)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
                 loss = criterion(outputs, labels)
+                print("labels",labels)
+                print("outputs",outputs)
 
+                print("loss",loss)
+
+                torch.backends.cudnn.benchmark = False
                 if phase == 'train':
                     loss.backward()
                     optimizer.step()

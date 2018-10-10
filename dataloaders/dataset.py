@@ -29,9 +29,9 @@ class VideoDataset(Dataset):
         self.split = split
 
         # The following three parameters are chosen as described in the paper section 4.1
-        self.resize_height = 224
-        self.resize_width = 224
-        self.crop_size = 224
+        self.resize_height = 112
+        self.resize_width = 112
+        self.crop_size = 112
 
         if not self.check_integrity():
             raise RuntimeError('Dataset not found or corrupted.' +
@@ -114,7 +114,8 @@ class VideoDataset(Dataset):
                 video_name = os.path.join(os.path.join(self.output_dir, 'train', video_class, video),
                                     sorted(os.listdir(os.path.join(self.output_dir, 'train', video_class, video)))[0])
                 image = cv2.imread(video_name)
-                if np.shape(image)[0] != 224 or np.shape(image)[1] != 224:
+                #if np.shape(image)[0] != 112 or np.shape(image)[1] != 112:
+                if np.shape(image)[0] != 112 or np.shape(image)[1] != 112:
                     return False
                 else:
                     break
@@ -227,7 +228,7 @@ class VideoDataset(Dataset):
         frames = sorted([os.path.join(file_dir, img) for img in os.listdir(file_dir)])
         frame_count = len(frames)
         buffer = np.empty((frame_count, self.resize_height, self.resize_width, 3), np.dtype('float32'))
-        buffer_bbox = np.empty((frame_count, 100, 4), np.dtype('float32'))
+        buffer_bbox = np.empty((frame_count, 20, 5), np.dtype('float32'))
         for i, frame_name in enumerate(frames):
             img_index = frame_name.split('/')[-1][:-4]
             frame_index = frame_name.split('/')[-3:-1]

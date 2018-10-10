@@ -45,23 +45,35 @@ class ConvTemporalGraphical(nn.Module):
         super().__init__()
 
         self.kernel_size = kernel_size
-        self.conv = nn.Conv2d(
+        # self.conv = nn.Conv2d(
+        #     in_channels,
+        #     out_channels * kernel_size,
+        #     kernel_size=(t_kernel_size, 1),
+        #     padding=(t_padding, 0),
+        #     stride=(t_stride, 1),
+        #     dilation=(t_dilation, 1),
+        #     bias=bias)
+        self.conv1d = nn.Conv1d(
             in_channels,
             out_channels * kernel_size,
-            kernel_size=(t_kernel_size, 1),
-            padding=(t_padding, 0),
-            stride=(t_stride, 1),
-            dilation=(t_dilation, 1),
+            kernel_size=1,
+            padding=0,
+            stride=1,
+            dilation=1,
             bias=bias)
 
     def forward(self, x, A):
+        print("gcn x", x.device)
         assert A.size(0) == self.kernel_size
-        print("x.shape",x.shape)
-        x = self.conv(x)
+        x = self.conv1d(x)
 
-        n, kc, t, v = x.size()
-        x = x.view(n, self.kernel_size, kc//self.kernel_size, t, v)
-        x = torch.einsum('nkctv,kvw->nctw', (x, A))
+        n, kc, v = x.size()
+        x = x.view(n, self.kernel_size, kc//self.kernel_size, v)
+        x = torch.einsum('nkcv,kvw->ncw', (x, A))
+
+        # n, kc, t, v = x.size()
+        # x = x.view(n, self.kernel_size, kc//self.kernel_size, t, v)
+        # x = torch.einsum('nkctv,kvw->nctw', (x, A))
         #print('einsum',x.shape)
         x = x.contiguous()
         print('einsum',x.shape)
