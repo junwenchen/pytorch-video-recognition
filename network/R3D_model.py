@@ -223,33 +223,35 @@ class R3DNet(nn.Module):
         x_avg = self.pool(x).squeeze(2).squeeze(2).squeeze(2)
 
 
-        # [N,C,T,H,W] = x.shape
-        # x = x.permute(0,2,1,3,4).contiguous().view(-1,C,H,W)
-        #
-        # video_pooled_feat = torch.zeros((N*T,20,2048,7,7))
-        # bbox = bbox[:,:8,:,:]
-        # bbox = bbox.view(-1,20,5)[:32,:,:]
-        #
-        # for i in range(bbox.shape[0]):
-        #    video_pooled_feat[i] = self.RCNN_roi_align(x[i].view(1,C,H,W), bbox[i]) #(N*T,100,d,7,7)
-        # video_pooled_feat = video_pooled_feat.cuda()
-        #
-        # #nkctv,kvw->nctw
-        # video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,2048,7,7), (1, 1)).squeeze(2).squeeze(2).view(T,20,C)  #[1600, 2048, 1, 1]
-        # adjacent_matrix_k = adjacent_matrix.squeeze(0)
-        # video_pooled_feat = video_pooled_feat.view(N, 2048, -1)
-        #
-        # node,A = self.gcn1(video_pooled_feat, adjacent_matrix_k)  #
-        # node,A = self.gcn2(node, A)
-        #
-        # node = node.squeeze(0).view(512,-1).permute(1,0)
-        #
-        # node = torch.mean(node,0).view(1,-1)
-        #
-        # feat = torch.cat((x_avg,node),dim=1)
+        [N,C,T,H,W] = x.shape
+        x = x.permute(0,2,1,3,4).contiguous().view(-1,C,H,W)
 
-        # logits = self.linear(feat)
-        logits = self.linear3d(x_avg)
+        video_pooled_feat = torch.zeros((N*T,20,2048,7,7))
+        # bbox = bbox[:,:8,:,:]
+        bbox = bbox[:,::2,:,:]
+        bbox = bbox.view(-1,20,5)[:32,:,:]
+
+        for i in range(bbox.shape[0]):
+           video_pooled_feat[i] = self.RCNN_roi_align(x[i].view(1,C,H,W), bbox[i]) #(N*T,100,d,7,7)
+        video_pooled_feat = video_pooled_feat.cuda()
+
+        #nkctv,kvw->nctw
+        video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,2048,7,7), (1, 1)).squeeze(2).squeeze(2).view(T,20,C)  #[1600, 2048, 1, 1]
+        adjacent_matrix_k = adjacent_matrix.squeeze(0)
+        video_pooled_feat = video_pooled_feat.view(N, 2048, -1)
+
+        node,A = self.gcn1(video_pooled_feat, adjacent_matrix_k)  #
+        node,A = self.gcn2(node, A)
+
+        node = node.squeeze(0).view(512,-1).permute(1,0)
+
+        node = torch.mean(node,0).view(1,-1)
+
+        feat = torch.cat((x_avg,node),dim=1)
+        print("feat",feat.shape)
+
+        logits = self.linear(feat)
+        # logits = self.linear3d(x_avg)
 
         return logits
 

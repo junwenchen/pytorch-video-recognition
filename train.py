@@ -26,7 +26,8 @@ print("Device being used:", device)
 nEpochs = 100  # Number of epochs for training
 resume_epoch = 0  # Default is 0, change if want to resume
 useTest = True # See evolution of the test set when training
-nTestInterval = 20 # Run on test set every nTestInterval epochs
+#nTestInterval = 20 # Run on test set every nTestInterval epochs
+nTestInterval = 1 # Run on test set every nTestInterval epochs
 snapshot = 50 # Store a model every snapshot epochs
 lr = 1e-3 # Learning rate
 # lr = 1e-5 # Learning rate
@@ -191,12 +192,14 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             running_loss = 0.0
             running_corrects = 0.0
 
-            for inputs, labels in tqdm(test_dataloader):
+            for inputs, labels, labels, adjacent_matrix in tqdm(test_dataloader):
+                bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
+                adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
                 with torch.no_grad():
-                    outputs = model(inputs)
+                    outputs = model(inputs, bbox_inputs, adjacent_matrix)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
                 loss = criterion(outputs, labels)
