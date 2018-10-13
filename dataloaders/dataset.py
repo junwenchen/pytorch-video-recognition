@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from torch.utils.data import Dataset
 from mypath import Path
+from network.model.graph_front.graphFront import _graphFront
 
 
 class VideoDataset(Dataset):
@@ -32,31 +33,23 @@ class VideoDataset(Dataset):
         self.resize_height = 112
         self.resize_width = 112
         self.crop_size = 112
+        self.graph = _graphFront()
 
         if not self.check_integrity():
             raise RuntimeError('Dataset not found or corrupted.' +
                                ' You need to download it from official website.')
 
-        # print("check_preprocess", self.check_preprocess())
         if (not self.check_preprocess()) or preprocess:
             print('Preprocessing of {} dataset, this will take long, but it will be done only once.'.format(dataset))
             self.preprocess()
 
         # Obtain all the filenames of files inside all the class folders
         # Going through each class folder one at a time
-        print("folder is", folder)
         self.fnames, labels = [], []
         for label in sorted(os.listdir(folder)):
             for fname in os.listdir(os.path.join(folder, label)):
                 self.fnames.append(os.path.join(folder, label, fname))
                 labels.append(label)
-
-        # print("bbox folder is", )
-        # self.fnames, labels = [], []
-        # for label in sorted(os.listdir(bbox_folder)):
-        #     for fname in os.listdir(os.path.join(folder, label)):
-        #         self.fnames.append(os.path.join(folder, label, fname))
-        #         labels.append(label)
 
         assert len(labels) == len(self.fnames)
         print('Number of {} videos: {:d}'.format(split, len(self.fnames)))
@@ -86,6 +79,7 @@ class VideoDataset(Dataset):
         # Loading and preprocessing.
         buffer, buffer_bbox = self.load_frames(self.fnames[index], self.bbox_output_dir)
         buffer, buffer_bbox = self.crop(buffer, buffer_bbox, self.clip_len, self.crop_size)
+        adjacent_matrix = self.graph.build_graph(buffer_bbox[:8,:,:])
         # buffer_bbox = self.load_bbox()
         labels = np.array(self.label_array[index])
 
@@ -94,7 +88,7 @@ class VideoDataset(Dataset):
             buffer = self.randomflip(buffer)
         buffer = self.normalize(buffer)
         buffer = self.to_tensor(buffer)
-        return torch.from_numpy(buffer), torch.from_numpy(buffer_bbox), torch.from_numpy(labels)
+        return torch.from_numpy(buffer), torch.from_numpy(buffer_bbox), torch.from_numpy(labels), adjacent_matrix
 
     def check_integrity(self):
         if not os.path.exists(self.root_dir):
@@ -230,9 +224,12 @@ class VideoDataset(Dataset):
         buffer = np.empty((frame_count, self.resize_height, self.resize_width, 3), np.dtype('float32'))
         buffer_bbox = np.empty((frame_count, 20, 5), np.dtype('float32'))
         for i, frame_name in enumerate(frames):
+            # print(buffer.shape)
             img_index = frame_name.split('/')[-1][:-4]
             frame_index = frame_name.split('/')[-3:-1]
             frame = np.array(cv2.imread(frame_name)).astype(np.float64)
+            # print(frame_name)
+            # print(frame.shape)
             #print(os.path.join(bbox_file_path, frame_index[0],frame_index[1], img_index + '.jpg_det.txt'))
             with open(os.path.join(bbox_file_path, frame_index[0],frame_index[1], img_index + '.jpg_det.txt'), 'r') as f:
                 bboxes = f.readlines()

@@ -7,6 +7,7 @@ class Path(object):
             root_dir = '/data/dataset/ucf101/UCF-5/'
             # Save preprocess data into output_dir
             output_dir = '/data/dataset/VAR/UCF-5/'
+            # output_dir = '/data/dataset/VAR/UCF-101/'
 
             bbox_output_dir = '/data/dataset/UCF-101-result/UCF-5-20/'
 

@@ -29,6 +29,7 @@ useTest = True # See evolution of the test set when training
 nTestInterval = 20 # Run on test set every nTestInterval epochs
 snapshot = 50 # Store a model every snapshot epochs
 lr = 1e-3 # Learning rate
+# lr = 1e-5 # Learning rate
 
 dataset = 'ucf101' # Options: hmdb51 or ucf101
 
@@ -75,7 +76,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                         {'params': R2Plus1D_model.get_10x_lr_params(model), 'lr': lr * 10}]
     elif modelName == 'R3D':
         model = R3D_model.R3DClassifier(num_classes=num_classes, layer_sizes=(3, 4, 6, 3))
-        #model = resnet.ResNet(num_classes=num_classes, layers=(3, 4, 6, 3), sample_size=224, sample_duration=16)
+        # model = resnet.ResNet(num_classes=num_classes, layers=(3, 4, 6, 3), sample_size=112, sample_duration=16)
         train_params = model.parameters()
     else:
         print('We only implemented C3D and R2Plus1D models.')
@@ -104,7 +105,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
 
     print('Training model on {} dataset...'.format(dataset))
     train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16), batch_size=1, shuffle=True, \
-                                  num_workers=8)
+                                  num_workers=0)
     val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=1, num_workers=8)
     test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=1, num_workers=8)
 
@@ -131,20 +132,20 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                 model.eval()
 
             torch.backends.cudnn.benchmark=False
-            for inputs, bbox_inputs, labels in tqdm(trainval_loaders[phase]):
+            for inputs, bbox_inputs, labels, adjacent_matrix in tqdm(trainval_loaders[phase]):
                 # move inputs and labels to the device the training is taking place on
                 inputs = Variable(inputs, requires_grad=True).to(device)
                 bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
+                adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
                 labels = Variable(labels).to(device)
                 optimizer.zero_grad()
 #                torch.backends.cudnn.benchmark = False
-                print("inputs.device",inputs.device)
                 if phase == 'train':
-                    outputs = model(inputs, bbox_inputs)
+                    outputs = model(inputs, bbox_inputs, adjacent_matrix)
                     # outputs = model(inputs)
                 else:
                     with torch.no_grad():
-                        outputs = model(inputs)
+                        outputs = model(inputs, bbox_inputs, adjacent_matrix)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
                 loss = criterion(outputs, labels)

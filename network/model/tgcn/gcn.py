@@ -63,7 +63,6 @@ class ConvTemporalGraphical(nn.Module):
             bias=bias)
 
     def forward(self, x, A):
-        print("gcn x", x.device)
         assert A.size(0) == self.kernel_size
         x = self.conv1d(x)
 
@@ -76,5 +75,4 @@ class ConvTemporalGraphical(nn.Module):
         # x = torch.einsum('nkctv,kvw->nctw', (x, A))
         #print('einsum',x.shape)
         x = x.contiguous()
-        print('einsum',x.shape)
         return x, A
