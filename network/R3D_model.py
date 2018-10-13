@@ -197,8 +197,8 @@ class R3DNet(nn.Module):
         # each of the final three layers doubles num_channels, while performing downsampling
         # inside the first block
         self.conv3 = SpatioTemporalResLayer(in_channels=256, out_channels=(128, 512), layer_size=layer_sizes[1], block_type=block_type, downsample=True)
-        self.conv4 = SpatioTemporalResLayer(in_channels=512, out_channels=(256, 1024), layer_size=layer_sizes[2], block_type=block_type, downsample=True)
-        self.conv5 = SpatioTemporalResLayer(in_channels=1024, out_channels=(512, 2048), layer_size=layer_sizes[3], block_type=block_type, downsample=True)
+        self.conv4 = SpatioTemporalResLayer(in_channels=512, out_channels=(256, 2048), layer_size=layer_sizes[2], block_type=block_type, downsample=True)
+        # self.conv5 = SpatioTemporalResLayer(in_channels=1024, out_channels=(512, 2048), layer_size=layer_sizes[3], block_type=block_type, downsample=True)
 
         # global average pooling of the output
         self.pool = nn.AdaptiveAvgPool3d(1)
@@ -218,7 +218,7 @@ class R3DNet(nn.Module):
         x = self.pool2(x)
         x = self.conv3(x)
         x = self.conv4(x)
-        x = self.conv5(x)
+        # x = self.conv5(x)
 
         x_avg = self.pool(x).squeeze(2).squeeze(2).squeeze(2)
 
