@@ -79,7 +79,8 @@ class VideoDataset(Dataset):
         # Loading and preprocessing.
         buffer, buffer_bbox = self.load_frames(self.fnames[index], self.bbox_output_dir)
         buffer, buffer_bbox = self.crop(buffer, buffer_bbox, self.clip_len, self.crop_size)
-        adjacent_matrix = self.graph.build_graph(buffer_bbox[:8,:,:])
+        adjacent_matrix = self.graph.build_graph(buffer_bbox[::2,:,:])
+        # adjacent_matrix = self.graph.normalize_digraph()
         # buffer_bbox = self.load_bbox()
         labels = np.array(self.label_array[index])
 
@@ -224,7 +225,6 @@ class VideoDataset(Dataset):
         buffer = np.empty((frame_count, self.resize_height, self.resize_width, 3), np.dtype('float32'))
         buffer_bbox = np.empty((frame_count, 20, 5), np.dtype('float32'))
         for i, frame_name in enumerate(frames):
-            # print(buffer.shape)
             img_index = frame_name.split('/')[-1][:-4]
             frame_index = frame_name.split('/')[-3:-1]
             frame = np.array(cv2.imread(frame_name)).astype(np.float64)

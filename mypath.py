@@ -19,6 +19,12 @@ class Path(object):
             output_dir = '/path/to/VAR/hmdb51'
 
             return root_dir, output_dir
+        elif database == 'something':
+            root_dir = '/data/dataset/something-something-v2-lite/20bn-something-something-v2-frames'
+            label_dir = '/data/dataset/something-something-v2-lite/label/something-something-v2-'
+            # root_dir = '/data/dataset/something-somthing-v2/20bn-something-something-v2-frames'
+            # label_dir = '/data/dataset/something-somthing-v2/label/something-something-v2-'
+            return root_dir, label_dir
         else:
             print('Database {} not available.'.format(database))
             raise NotImplementedError
