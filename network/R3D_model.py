@@ -214,59 +214,59 @@ class R3DNet(nn.Module):
         self.conv1da = nn.Conv1d(in_channels=2048, out_channels=512,kernel_size=1, padding=0,stride=1,dilation=1,bias=True)
         self.conv1db = nn.Conv1d(in_channels=512, out_channels=512,kernel_size=1, padding=0,stride=1,dilation=1,bias=True)
 
-    # def forward(self, x, bbox, adjacent_matrix):
-    def forward(self, x):
+    def forward(self, x, bbox, adjacent_matrix):
+    # def forward(self, x):
+        print(x.shape)
         x = self.conv1(x)
         x = self.pool1(x)
         x = self.conv2(x)
         x = self.pool2(x)
         x = self.conv3(x)
         x = self.conv4(x)
+        print(x.shape)
         # x = self.conv5(x)
 
         x_avg = self.pool(x).squeeze(2).squeeze(2).squeeze(2)
 
-       #  [N,C,T,H,W] = x.shape
-       #  x = x.permute(0,2,1,3,4).contiguous().view(-1,C,H,W)
-       #
-       #  bbox = bbox[:,::2,:,:].contiguous().view(-1,5)
-       #  #bbox = bbox.view(-1,5)
-       #  #bbox = bbox[:,::2,:,:].view(-1,5)
-       #  #bbox = bbox[:,::2,:,:].view(-1,20,5)
-       # # bbox = bbox.view(-1,20,5)[:32,:,:]
-       #  video_pooled_feat = self.RCNN_roi_align(x, bbox).cuda()
-       #  #for i in range(bbox.shape[0]):
-       #  #   video_pooled_feat[i] = self.RCNN_roi_align(x[i].view(1,C,H,W), bbox[i]) #(N*T,100,d,7,7)
-       #  #video_pooled_feat = video_pooled_feat.cuda()
-       #
-       #  #nkctv,kvw->nctw
-       #  #video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,512,7,7), (1, 1)).squeeze(2).squeeze(2).view(T,20,C)  #[1600, 2048, 1, 1]
-       #  video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,2048,7,7), (1, 1)).squeeze(2).squeeze(2).view(N, -1, 2048)  #[1600, 2048, 1, 1]
-       #  print(video_pooled_feat)
-       #
-       #  adjacent_matrix_k = adjacent_matrix.squeeze(1)
-       #  # adjacent_matrix_k = adjacent_matrix.squeeze(0).squeeze(1)
-       #  video_pooled_feat = video_pooled_feat.permute(0, 2, 1).contiguous()
-       #  print(video_pooled_feat)
-       #
-       #  node = self.conv1da(video_pooled_feat)
-       #  node = torch.bmm(node,adjacent_matrix_k)
-       #  print(node)
-       #
-       #  node = self.conv1db(node)
-       #  node = torch.bmm(node,adjacent_matrix_k)
-       #  #node,A = self.gcn1(video_pooled_feat, adjacent_matrix_k)  #
-       #  #node,A = self.gcn2(node, A)
-       #
-       #  #node = node.squeeze(0).view(512,-1).permute(1,0)
-       #  node = torch.mean(node,2)
-       #  #node = torch.mean(node,0).view(1,-1)
-       #
-       #  feat = torch.cat((x_avg,node),dim=1)
-       #  print("feat",feat.shape)
-       #
-       #  logits = self.linear(feat)
-        logits = self.linear3d(x_avg)
+        [N,C,T,H,W] = x.shape
+        x = x.permute(0,2,1,3,4).contiguous().view(-1,C,H,W)
+
+        bbox = bbox[:,::2,:,:].contiguous().view(-1,5)
+        #bbox = bbox.view(-1,5)
+        #bbox = bbox[:,::2,:,:].view(-1,5)
+        #bbox = bbox[:,::2,:,:].view(-1,20,5)
+       # bbox = bbox.view(-1,20,5)[:32,:,:]
+        video_pooled_feat = self.RCNN_roi_align(x, bbox).cuda()
+        #for i in range(bbox.shape[0]):
+        #   video_pooled_feat[i] = self.RCNN_roi_align(x[i].view(1,C,H,W), bbox[i]) #(N*T,100,d,7,7)
+        #video_pooled_feat = video_pooled_feat.cuda()
+
+        #nkctv,kvw->nctw
+        #video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,512,7,7), (1, 1)).squeeze(2).squeeze(2).view(T,20,C)  #[1600, 2048, 1, 1]
+        video_pooled_feat = F.adaptive_avg_pool2d(video_pooled_feat.view(-1,2048,7,7), \
+        (1, 1)).squeeze(2).squeeze(2).view(N, -1, 2048)  #[1600, 2048, 1, 1]
+
+        adjacent_matrix_k = adjacent_matrix.squeeze(1)
+        print(adjacent_matrix_k)
+        # adjacent_matrix_k = adjacent_matrix.squeeze(0).squeeze(1)
+        video_pooled_feat = video_pooled_feat.permute(0, 2, 1).contiguous()
+
+        node = self.conv1da(video_pooled_feat)
+        node = torch.bmm(node,adjacent_matrix_k)
+
+        node = self.conv1db(node)
+        node = torch.bmm(node,adjacent_matrix_k)
+        #node,A = self.gcn1(video_pooled_feat, adjacent_matrix_k)  #
+        #node,A = self.gcn2(node, A)
+
+        #node = node.squeeze(0).view(512,-1).permute(1,0)
+        node = torch.mean(node,2)
+        #node = torch.mean(node,0).view(1,-1)
+
+        feat = torch.cat((x_avg,node),dim=1)
+
+        logits = self.linear(feat)
+        # logits = self.linear3d(x_avg)
 
         return logits
 
@@ -294,10 +294,10 @@ class R3DClassifier(nn.Module):
         if pretrained:
             self.__load_pretrained_weights()
 
-    # def forward(self, x, bbox, adjacent_matrix):
-    #     x = self.res3d(x, bbox, adjacent_matrix)
-    def forward(self, x):
-        x = self.res3d(x)
+    def forward(self, x, bbox, adjacent_matrix):
+        x = self.res3d(x, bbox, adjacent_matrix)
+    # def forward(self, x):
+    #     x = self.res3d(x)
         #print(x.shape)  #torch.Size([1, 2048, 16, 14, 14]) 4, 2048, 8, 14, 14
         return x
 

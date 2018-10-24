@@ -28,15 +28,18 @@ class _graphFront(nn.Module):
         return iou
 
     def build_graph(self, rois):
-        num_frames = len(rois)
-        adjacent_matrix = torch.zeros((num_frames*20, num_frames*20))
+        num_frames, num_roi_per_image, _ = rois.shape
+        adjacent_matrix = torch.zeros((num_frames*num_roi_per_image, num_frames*num_roi_per_image))
         for t in range(num_frames-1):
             roi_t = rois[t]
             roi_t1 = rois[t+1]
             for i in range(len(roi_t)):
                 for j in range(len(roi_t+1)):
-                    adjacent_matrix[20*(t-1)+i][20*(t-1)+j] = self.IoU(roi_t[i], roi_t1[j])
-        return adjacent_matrix.view(1,num_frames*20,num_frames*20)
+                    adjacent_matrix[num_roi_per_image*(t-1)+i][num_roi_per_image*(t-1)+j] \
+                    = self.IoU(roi_t[i], roi_t1[j])
+        adjacent_I = torch.eye(num_frames*num_roi_per_image, num_frames*num_roi_per_image)
+        adjacent_matrix = adjacent_matrix + adjacent_I
+        return adjacent_matrix.view(1,num_frames*num_roi_per_image,num_frames*num_roi_per_image)
 
     def gcn(self, rois):
         num_frames = len(rois)
@@ -45,24 +48,11 @@ class _graphFront(nn.Module):
             roi_t = rois[t]
             roi_t1 = rois[t+1]
             for i in range(len(roi_t)):
-                for j in range(len(roi_t1)):
+                for j in range(len(roi_t+1)):
                     adjacent_matrix[20*(t-1)+i][20*(t-1)+j] = self.IoU(roi_t[i], roi_t1[j])
         return adjacent_matrix
 
-    def normalize_digraph(self, A):
-        Dl = torch.sum(A, 2)
-        num_node = A.shape[2]
-        Dn = torch.zeros(A.shape[0], num_node, num_node)
-        for i in range(A.shape[0]):
-            for j in range(num_node):
-                if Dl[i][j] > 0:
-                     Dn[i][j][j] = Dl[i][j]**(-1)
-        AD = torch.bmm(Dn, A)
-        return AD.transpose()
-
-# A = torch.randn(1, 10, 10)
-# s = _graphFront()
-# print(s.normalize_digraph(A))
+    
 
 # class _graphFront(nn.Module):
 #     # def __init__(self):

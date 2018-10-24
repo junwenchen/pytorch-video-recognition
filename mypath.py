@@ -8,7 +8,6 @@ class Path(object):
             # Save preprocess data into output_dir
             output_dir = '/data/dataset/VAR/UCF-5/'
             # output_dir = '/data/dataset/VAR/UCF-101/'
-
             bbox_output_dir = '/data/dataset/UCF-101-result/UCF-5-20/'
 
             return root_dir, output_dir, bbox_output_dir
@@ -22,9 +21,10 @@ class Path(object):
         elif database == 'something':
             root_dir = '/data/dataset/something-something-v2-lite/20bn-something-something-v2-frames'
             label_dir = '/data/dataset/something-something-v2-lite/label/something-something-v2-'
+            bbox_output_dir = '/data/dataset/something-something-v2-lite/20bn-something-something-det'
             # root_dir = '/data/dataset/something-somthing-v2/20bn-something-something-v2-frames'
             # label_dir = '/data/dataset/something-somthing-v2/label/something-something-v2-'
-            return root_dir, label_dir
+            return root_dir, label_dir, bbox_output_dir
         else:
             print('Database {} not available.'.format(database))
             raise NotImplementedError

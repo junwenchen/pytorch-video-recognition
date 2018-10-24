@@ -24,7 +24,7 @@ class VideoDataset(Dataset):
     #      clip_len=16, preprocess=False):
 
     def __init__(self, dataset='ucf101', split='train', clip_len=16, transforms=None):
-        self.root_dir,split_dir = Path.db_dir(dataset)
+        self.root_dir, split_dir, self.bbox_dir = Path.db_dir(dataset)
         # self.root_dir, self.output_dir, self.bbox_output_dir = root_dir, output_dir, \
         #     bbox_output_dir
         self.fnames, self.labels  = self.make_dataset_sth(split_dir, split)
@@ -37,13 +37,13 @@ class VideoDataset(Dataset):
         self.resize_height = 256
         self.resize_width = 256
         self.crop_size = 256
-        # self.graph = _graphFront()
+        self.graph = _graphFront()
 
     def __getitem__(self, index):
         # print(self.fnames[index])
-        buffer = self.load_frames(self.fnames[index])
-        buffer = self.crop(buffer, self.clip_len, self.crop_size)
-        # adjacent_matrix = self.graph.build_graph(buffer_bbox[::2,:,:])
+        buffer, buffer_bbox = self.load_frames(self.fnames[index], self.bbox_dir)
+        buffer, buffer_bbox = self.crop(buffer, buffer_bbox, self.clip_len, self.crop_size)
+        adjacent_matrix = self.graph.build_graph(buffer_bbox[::2,:,:])
         #labels = np.array(self.label_array[index])
         if self.split == 'test':
             # Perform data augmentation
@@ -51,16 +51,14 @@ class VideoDataset(Dataset):
         buffer = self.normalize(buffer)
         buffer = self.to_tensor(buffer)
         label = np.array(self.labels[index])
-        return torch.from_numpy(buffer), torch.from_numpy(label)
-        # return torch.from_numpy(buffer), torch.from_numpy(buffer_bbox), torch.from_numpy(labels), adjacent_matrix
+        # return torch.from_numpy(buffer), torch.from_numpy(label)
+        return torch.from_numpy(buffer), torch.from_numpy(buffer_bbox), \
+        torch.from_numpy(label), adjacent_matrix
 
         # vid, label= self.data[index]
         # imgs = load_rgb_frames_sth(self.root, vid)
         # imgs = self.transforms(imgs)  #from input to 224
         # return video_to_tensor(imgs), torch.from_numpy(label)
-
-    # def __len__(self):
-    #     return len(self.data)
 
     def __len__(self):
         return len(self.fnames)
@@ -95,7 +93,6 @@ class VideoDataset(Dataset):
         #frame_name = []
         #frame_label = []
         for vid in data:
-            #print(vid['template'])
             vid_index = int(labels[vid['template'].replace('[','').replace(']','')])
             #num_frames = len(os.listdir(os.path.join(root, vid['id'])))
             #labels_index = np.zeros((num_labels, num_frames), np.float32)
@@ -202,23 +199,27 @@ class VideoDataset(Dataset):
     def to_tensor(self, buffer):
         return buffer.transpose((3, 0, 1, 2))
 
-    def load_frames(self, file_dir):
+    def load_frames(self, file_dir, bbox_file_path):
         frames = sorted([os.path.join(file_dir, img) for img in os.listdir(file_dir)])
         frame_count = len(frames)
-        buffer = np.empty((frame_count, self.resize_height, self.resize_width, 3), np.dtype('float32'))
+        buffer = np.empty((frame_count, self.resize_height, self.resize_width, 3), \
+        np.dtype('float32'))
+        buffer_bbox = np.empty((frame_count, 10, 5), np.dtype('float32'))
         for i, frame_name in enumerate(frames):
-            # img_index = frame_name.split('/')[-1][:-4]
-            # frame_index = frame_name.split('/')[-3:-1]
-            frame = np.array(cv2.resize(cv2.imread(frame_name),(self.resize_height, self.resize_width)).astype(np.float64))
-            # with open(os.path.join(bbox_file_path, frame_index[0],frame_index[1], img_index + '.jpg_det.txt'), 'r') as f:
-            #     bboxes = f.readlines()
-            #     for j in range(len(bboxes)):
-            #         buffer_bbox[i][j][:] = bboxes[j].strip().split(' ')
+            img_index = frame_name.split('/')[-1][:-4]
+            frame_index = frame_name.split('/')[-2]
+            frame = np.array(cv2.resize(cv2.imread(frame_name),(self.resize_height, \
+            self.resize_width)).astype(np.float64))
+            with open(os.path.join(bbox_file_path, frame_index, img_index + '_det.txt'),\
+             'r') as f:
+                bboxes = f.readlines()
+                for j in range(len(bboxes)):
+                    buffer_bbox[i][j][:] = bboxes[j].strip().split(' ')
             buffer[i] = frame
-        # return buffer, buffer_bbox
-        return buffer
+        return buffer, buffer_bbox
+        # return buffer
 
-    def crop(self, buffer, clip_len, crop_size):
+    def crop(self, buffer, buffer_bbox, clip_len, crop_size):
         # randomly select time index for temporal jittering
         # time_index = np.random.randint(buffer.shape[0] - clip_len)
         #
@@ -238,9 +239,9 @@ class VideoDataset(Dataset):
                  height_index:height_index + crop_size,
                  width_index:width_index + crop_size, :]
 
-        # buffer_bbox = buffer_bbox[time_index:time_index + clip_len, :]
+        buffer_bbox = buffer_bbox[time_index:time_index + clip_len, :]
 
-        return buffer
+        return buffer, buffer_bbox
 
 
 
