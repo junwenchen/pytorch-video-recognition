@@ -12,9 +12,8 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 
 # from dataloaders.dataset import VideoDataset
-from dataloaders.dataset_sth import VideoDataset
+from dataloaders.dataset_vol import VolleyballDataset
 from network import C3D_model, R2Plus1D_model, R3D_model
-#from network.model.graph_front import _graphFront
 #torch.backends.cudnn.benchmark = True
 
 # Use GPU if available else revert to CPU
@@ -27,13 +26,12 @@ print("Device being used:", device)
 nEpochs = 100  # Number of epochs for training
 resume_epoch = 0  # Default is 0, change if want to resume
 useTest = True # See evolution of the test set when training
-nTestInterval = 20 # Run on test set every nTestInterval epochs
-#nTestInterval = 1 # Run on test set every nTestInterval epochs
-snapshot = 50 # Store a model every snapshot epochs
+# nTestInterval = 20 # Run on test set every nTestInterval epochs
+nTestInterval = 100 # Run on test set every nTestInterval epochs
+snapshot = 5 # Store a model every snapshot epochs
 lr = 1e-3 # Learning rate
-# lr = 1e-5 # Learning rate
 
-dataset = 'something' # Options: hmdb51 or ucf101
+dataset = 'volleyball' # Options: hmdb51 or ucf101
 
 if dataset == 'hmdb51':
     num_classes=51
@@ -41,6 +39,8 @@ elif dataset == 'ucf101':
     num_classes = 5
 elif dataset == 'something':
     num_classes = 10
+elif dataset == 'volleyball':
+    num_classes = 8
 else:
     print('We only implemented hmdb and ucf datasets.')
     raise NotImplementedError
@@ -50,13 +50,13 @@ exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]
 
 if resume_epoch != 0:
     runs = sorted(glob.glob(os.path.join(save_dir_root, 'run', 'run_*')))
+    print(runs)
     run_id = int(runs[-1].split('_')[-1]) if runs else 0
 else:
     runs = sorted(glob.glob(os.path.join(save_dir_root, 'run', 'run_*')))
     run_id = int(runs[-1].split('_')[-1]) + 1 if runs else 0
 
 save_dir = os.path.join(save_dir_root, 'run', 'run_' + str(run_id))
-#modelName = 'C3D' # Options: C3D or R2Plus1D or R3D
 modelName = 'R3D' # Options: C3D or R2Plus1D or R3D
 # modelName = 'saveName = modelName + '-' + dataset
 saveName = modelName + '-' + dataset
@@ -90,6 +90,8 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10,
                                           gamma=0.1)  # the scheduler divides the lr by 10 every 10 epochs
 
+    model.to(device)  #move here because resume need .cuda()
+
     if resume_epoch == 0:
         print("Training {} from scratch...".format(modelName))
     else:
@@ -101,17 +103,17 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
         optimizer.load_state_dict(checkpoint['opt_dict'])
 
     print('Total params: %.2fM' % (sum(p.numel() for p in model.parameters()) / 1000000.0))
-    model.to(device)
+    # model.to(device)
     criterion.to(device)
 
     log_dir = os.path.join(save_dir, 'models', datetime.now().strftime('%b%d_%H-%M-%S') + '_' + socket.gethostname())
     writer = SummaryWriter(log_dir=log_dir)
 
     print('Training model on {} dataset...'.format(dataset))
-    train_dataloader = DataLoader(VideoDataset(dataset=dataset, split='train',clip_len=16), batch_size=2, shuffle=True, \
+    train_dataloader = DataLoader(VolleyballDataset(dataset=dataset, split='train',clip_len=16), batch_size=1, shuffle=True, \
                                   num_workers=0)
-    val_dataloader   = DataLoader(VideoDataset(dataset=dataset, split='val',  clip_len=16), batch_size=1, num_workers=0)
-    test_dataloader  = DataLoader(VideoDataset(dataset=dataset, split='test', clip_len=16), batch_size=1, num_workers=0)
+    val_dataloader   = DataLoader(VolleyballDataset(dataset=dataset, split='val',  clip_len=16), batch_size=1, num_workers=0)
+    test_dataloader  = DataLoader(VolleyballDataset(dataset=dataset, split='test', clip_len=16), batch_size=1, num_workers=0)
 
     trainval_loaders = {'train': train_dataloader, 'val': val_dataloader}
     trainval_sizes = {x: len(trainval_loaders[x].dataset) for x in ['train', 'val']}
@@ -139,6 +141,7 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             for inputs, bbox_inputs, labels, adjacent_matrix in tqdm(trainval_loaders[phase]):
             # for inputs, labels in tqdm(trainval_loaders[phase]):
                 # move inputs and labels to the device the training is taking place on
+                # print('inputs', inputs.shape)
                 inputs = Variable(inputs, requires_grad=True).to(device)
                 bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
                 adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
@@ -157,7 +160,6 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                 loss = criterion(outputs, labels)
                 #print("labels",labels)
                 #print("outputs",outputs)
-
                 print("loss",loss)
 
                 torch.backends.cudnn.benchmark = False
@@ -183,6 +185,8 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             print("Execution time: " + str(stop_time - start_time) + "\n")
 
         if epoch % save_epoch == (save_epoch - 1):
+            print(os.path.join(save_dir, 'models', saveName + \
+            '_epoch-' + str(epoch) + '.pth.tar'))
             torch.save({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
@@ -201,12 +205,11 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             # for inputs, labels in tqdm(test_dataloader):
                 bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
                 adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
-                inputs = inputs.to(device)
-                labels = labels.to(device)
+                inputs = Variable(inputs.to(device))
 
                 with torch.no_grad():
-                    outputs = model(inputs)
-                    #outputs = model(inputs, bbox_inputs, adjacent_matrix)
+                    # outputs = model(inputs)
+                    outputs = model(inputs, bbox_inputs, adjacent_matrix)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
                 loss = criterion(outputs, labels)
