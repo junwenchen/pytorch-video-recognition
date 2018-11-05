@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 
 # from dataloaders.dataset import VideoDataset
-from dataloaders.dataset_vol import VolleyballDataset
-from network import C3D_model, R2Plus1D_model, R3D_model
+from dataloaders.dataset_vol2 import VolleyballDataset
+from network import C3D_model, R2Plus1D_model, R3D_model, R2Dnet
 #torch.backends.cudnn.benchmark = True
 
 # Use GPU if available else revert to CPU
@@ -57,7 +57,7 @@ else:
     run_id = int(runs[-1].split('_')[-1]) + 1 if runs else 0
 
 save_dir = os.path.join(save_dir_root, 'run', 'run_' + str(run_id))
-modelName = 'R3D' # Options: C3D or R2Plus1D or R3D
+modelName = 'R2D' # Options: C3D or R2Plus1D or R3D
 # modelName = 'saveName = modelName + '-' + dataset
 saveName = modelName + '-' + dataset
 
@@ -80,6 +80,10 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                         {'params': R2Plus1D_model.get_10x_lr_params(model), 'lr': lr * 10}]
     elif modelName == 'R3D':
         model = R3D_model.R3DClassifier(num_classes=num_classes, layer_sizes=(3, 4, 6, 3))
+        # model = resnet.ResNet(num_classes=num_classes, layers=(3, 4, 6, 3), sample_size=112, sample_duration=16)
+        train_params = model.parameters()
+    elif modelName == 'R2D':
+        model = R2Dnet.R2DClassifier(group_num_classes=num_classes, pretrained=True)
         # model = resnet.ResNet(num_classes=num_classes, layers=(3, 4, 6, 3), sample_size=112, sample_duration=16)
         train_params = model.parameters()
     else:
@@ -138,33 +142,33 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
                 model.eval()
 
             torch.backends.cudnn.benchmark=False
-            for inputs, bbox_inputs, labels, adjacent_matrix in tqdm(trainval_loaders[phase]):
+            # for inputs, bbox_inputs, labels, adjacent_matrix in tqdm(trainval_loaders[phase]):
             # for inputs, labels in tqdm(trainval_loaders[phase]):
+            for inputs, labels, dists in tqdm(trainval_loaders[phase]):
                 # move inputs and labels to the device the training is taking place on
-                # print('inputs', inputs.shape)
                 inputs = Variable(inputs, requires_grad=True).to(device)
-                bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
-                adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
+                # bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
+                # adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
                 labels = Variable(labels).to(device)
+                dists = Variable(dists, requires_grad = True).to(device)
                 optimizer.zero_grad()
-#                torch.backends.cudnn.benchmark = False
                 if phase == 'train':
-                    # outputs = model(inputs)
-                    outputs = model(inputs, bbox_inputs, adjacent_matrix)
+                    outputs = model(inputs, dists)
+                    # outputs = model(inputs, bbox_inputs, adjacent_matrix)
                 else:
                     with torch.no_grad():
-                        outputs = model(inputs, bbox_inputs, adjacent_matrix)
-                        # outputs = model(inputs)
+                        # outputs = model(inputs, bbox_inputs, adjacent_matrix)
+                        outputs = model(inputs)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
                 loss = criterion(outputs, labels)
-                #print("labels",labels)
-                #print("outputs",outputs)
+                print("labels",labels)
+                print("outputs",outputs)
                 print("loss",loss)
 
                 torch.backends.cudnn.benchmark = False
                 if phase == 'train':
-                    loss.backward()
+                    loss.backward(retain_graph=True)
                     optimizer.step()
 
                 running_loss += loss.item() * inputs.size(0)

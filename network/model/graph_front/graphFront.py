@@ -52,7 +52,16 @@ class _graphFront(nn.Module):
                     adjacent_matrix[20*(t-1)+i][20*(t-1)+j] = self.IoU(roi_t[i], roi_t1[j])
         return adjacent_matrix
 
-    
+    def normalize_digraph(self, A):
+        Dl = torch.sum(A, 2)
+        num_node = A.shape[2]
+        Dn = torch.zeros(A.shape[0], num_node, num_node)
+        for i in range(A.shape[0]):
+            for j in range(num_node):
+                if Dl[i][j] > 0:
+                     Dn[i][j][j] = Dl[i][j]**(-1)
+        AD = torch.bmm(Dn, A)
+        return AD.transpose()
 
 # class _graphFront(nn.Module):
 #     # def __init__(self):
