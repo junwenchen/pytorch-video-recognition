@@ -140,9 +140,9 @@ class R2DNet(nn.Module):
         # torch.autograd.Variable(torch.zeros(1,21,self.hidden_dim)).cuda())
         self.linear = nn.Linear(256, group_num_classes)
 
-    def forward(self, x, dist, dist_num):
+    def forward(self, x, dist):
         [N, T, M, C, H, W] = x.shape
-        # base_out = self.base_model(x.view(-1, C, H, W)).view(N*T, M, -1)
+        base_out = self.base_model(x.view(-1, C, H, W)).view(N*T, M, -1)
 
         # print(np.where(base_out>100))
         # base_out_c.detach()
@@ -171,36 +171,35 @@ class R2DNet(nn.Module):
         #     dist[i] = self.normalize_digraph(dist[i].unsqueeze(0).cuda())
         # # print("dist",dist[0])
 
-        # with torch.no_grad():
-        #     base_out = Variable(base_out)
+        with torch.no_grad():
+            base_out = Variable(base_out)
 
-        # print("base_out", base_out.shape)
-        gcn_out = torch.zeros(N*T, 8).cuda()
-        dist_num = dist_num.view(-1)
-        # print("dist_num", dist_num)
-        dist = dist.view(-1, 12, 12)
-        x = x.view(-1, M, C, H, W)
-        for i in range(N*T):
-            # print("dist_num", dist_num.view(-1)[i])
-            base_out = self.base_model(x[i, :dist_num[i]])
-            with torch.no_grad():
-                base_out = Variable(base_out)
-            # print(base_out[i][:dist_num.view(-1)[i]].unsqueeze(0).shape)
-            node1 = self.conv1da(base_out[:dist_num.view(-1)[i]].unsqueeze(0).permute(0,2,1).contiguous())
-            # print("before", node1)
-            # print(dist[i,:dist_num[i],:dist_num[i]].unsqueeze(0).shape)
-            # print(node1.permute(0,2,1).contiguous().shape)
-            node1 = torch.bmm(dist[i, :dist_num[i], :dist_num[i]].unsqueeze(0).float(), \
-            node1.permute(0,2,1).contiguous())
-            # print("bmm", node1)
-            node1 = F.relu(node1)
-            nodeLinear = self.convLinear(node1.permute(0,2,1).contiguous())
-            # print("nodeLinear", nodeLinear)
-            pooled_feat = self.pool(nodeLinear).squeeze(2)
-            # print("pooled_feat", pooled_feat.shape)
-            gcn_out[i] = pooled_feat
+        node1 = self.conv1da(base_out.permute(0,2,1)).cuda()
+        node1 = torch.bmm(dist.view(-1,12,12).float(), node1.permute(0,2,1))
+        node1 = F.relu(node1)
 
-        group_out = self.avg_pool(gcn_out.view(N, -1, T))
+        nodelinear = self.convLinear(node1.permute(0,2,1))
+        pooled_feat = self.pool(nodelinear).squeeze(2)
+
+        group_out = self.avg_pool(pooled_feat.view(N, -1, T))
+
+        # gcn_out = torch.zeros(N*T, 8).cuda()
+        # dist_num = dist_num.view(-1)
+        # dist = dist.view(-1, 12, 12)
+        # x = x.view(-1, M, C, H, W)
+        # for i in range(N*T):
+        #     base_out = self.base_model(x[i, :dist_num[i]])
+        #     with torch.no_grad():
+        #         base_out = Variable(base_out)
+        #     node1 = self.conv1da(base_out[:dist_num.view(-1)[i]].unsqueeze(0).permute(0,2,1).contiguous())
+        #     node1 = torch.bmm(dist[i, :dist_num[i], :dist_num[i]].unsqueeze(0).float(), \
+        #     node1.permute(0,2,1).contiguous())
+        #     node1 = F.relu(node1)
+        #     nodeLinear = self.convLinear(node1.permute(0,2,1).contiguous())
+        #     pooled_feat = self.pool(nodeLinear).squeeze(2)
+        #     gcn_out[i] = pooled_feat
+        #
+        # group_out = self.avg_pool(gcn_out.view(N, -1, T))
 
         #normalize
         # node1 = self.conv1da(base_out.permute(0,2,1).contiguous()).permute(0,2,1).contiguous()
@@ -248,8 +247,8 @@ class R2DClassifier(nn.Module):
         if pretrained:
             self.__load_pretrained_weights()
 
-    def forward(self, x, dist, dist_num):
-        x = self.res2d(x, dist, dist_num)
+    def forward(self, x, dist):
+        x = self.res2d(x, dist)
         return x
 
     def __load_pretrained_weights(self):

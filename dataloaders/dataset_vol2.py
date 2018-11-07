@@ -56,7 +56,7 @@ class VolleyballDataset(Dataset):
     def __getitem__(self, index):
         # Loading and preprocessing.
         labels = np.array(self.labels[index])
-        buffer, dist, dist_num = self.load_frames(self.fnames[index], self.bboxes[index])
+        buffer, dist= self.load_frames(self.fnames[index], self.bboxes[index])
         # buffer = self.transform2(buffer)
         # buffer, buffer_bbox = self.crop(buffer, buffer_bbox, self.clip_len, self.crop_size)
         # adjacent_matrix = self.graph.build_graph(buffer_bbox[::2,:,:])
@@ -70,8 +70,8 @@ class VolleyballDataset(Dataset):
         # return torch.from_numpy(buffer), torch.from_numpy(labels), torch.from_numpy(buffer_bbox)
         # return torch.from_numpy(buffer), torch.from_numpy(buffer_bbox), \
         # torch.from_numpy(labels), adjacent_matrix
-        return torch.from_numpy(buffer[::2,:,:,:,:]), torch.from_numpy(labels), torch.from_numpy(dist[::2,:,:]), \
-        torch.from_numpy(dist_num[::2])
+        return torch.from_numpy(buffer[::2,:,:,:,:]), torch.from_numpy(labels), \
+        torch.from_numpy(dist[::2,:,:])
 
     def randomflip(self, buffer):
         """Horizontally flip the given image and ground truth randomly with a probability of 0.5."""
@@ -107,7 +107,7 @@ class VolleyballDataset(Dataset):
                     item.split(' ')[0][:-4]))
                     frame_label.append(label_index[item_index[1]])
                     frame_bbox.append(os.path.join(self.bbox_output_dir, video, \
-                    item.split(' ')[0][:-4], 'person_detections.txt'))
+                    item.split(' ')[0][:-4], 'tracklets.txt'))
 
         return frame_name, frame_label, frame_bbox
 
@@ -115,100 +115,57 @@ class VolleyballDataset(Dataset):
         with open(bbox_dir, 'r') as f:
             det_lines = f.readlines()
 
+        det_lines = [item.strip().split('\t') for item in det_lines]
+
+        if len(det_lines) < 12:
+            for i in range(12-len(det_lines)):
+                det_lines.append(det_lines[-(i+1)])  #person number 12
+
         frames = sorted([os.path.join(file_dir, img) for img in os.listdir(file_dir)])
         frame_count = len(frames)
 
-        # buffer = np.empty((frame_count, 12, self.resize_height, self.resize_width, 3), \
-        # np.dtype('float32'))
         buffer = np.empty((frame_count, 12, 3, self.resize_height, self.resize_width), \
         np.dtype('float32'))
         dist = np.zeros((frame_count, 12, 12), np.dtype('float64'))
-        dist_num = np.zeros((frame_count), np.dtype('int'))
 
-        # buffer = np.empty((frame_count, 12, 3, self.resize_height, self.resize_width), \
-        # np.dtype('float32'))
-        # dist = np.zeros((frame_count, 12, 12), np.dtype('float64'))
-        # dist_num = np.zeros((frame_count), np.dtype('int'))
-
-        person_index = 0
         for i, frame_name in enumerate(frames):
             frame = cv2.imread(frame_name)
-            if person_index >= len(det_lines):
-                buffer[i] = buffer[i-1]
-                dist[i] = dist[i-1]
-                dist_num[i] = dist_num[i-1]
-                continue
-            det_index = det_lines[person_index].strip().split('\t')
-            if frame_name.strip().split('/')[-1] != det_index[0]:
-                buffer[i] = buffer[i-1]
-                dist[i] = dist[i-1]
-                dist_num[i] = dist_num[i-1]
-                continue
-            person_index += 1
-            if not os.path.exists(os.path.join(self.bbox_output, det_index[0][:-4])):
-                os.makedirs(os.path.join(self.bbox_output, det_index[0][:-4]))
-
-            dist_num[i] = min(12, int(det_index[1]))
-            for j in range(min(12,int(det_index[1]))):
-                buffer_bbox = [int(x) for x in det_index[(2+j*6):(2+j*6)+4]]
+            for j in range(len(det_lines)):
+                buffer_bbox = [int(x) for x in det_lines[j][i+1].split(' ')]
                 person = frame[buffer_bbox[1]:buffer_bbox[1]+buffer_bbox[3], \
                 buffer_bbox[0]:buffer_bbox[0]+buffer_bbox[2]]
                 j_center_h = buffer_bbox[1]+buffer_bbox[3]/2
                 j_center_w = buffer_bbox[0]+buffer_bbox[2]/2
-                for k in range(j+1, min(12,int(det_index[1]))):
-                    buffer_bbox_k = [int(x) for x in det_index[(2+k*6):(2+k*6)+4]]
+                for k in range(j+1, len(det_lines)):
+                    buffer_bbox_k = [int(x) for x in det_lines[k][i+1].split(' ')]
                     k_center_h = buffer_bbox_k[1]+buffer_bbox_k[3]/2
                     k_center_w = buffer_bbox_k[0]+buffer_bbox_k[2]/2
                     dist[i][j][k] = abs(j_center_h-k_center_h)+abs(j_center_w-k_center_w)
                     dist[i][k][j] = dist[i][j][k]
 
-                # cv2.imwrite(os.path.join(self.bbox_output, det_index[0][:-4],str(j)+'.jpg'), person)
-                # person = np.array(cv2.resize(person,(self.resize_width, \
-                # self.resize_height))).astype(np.float64)
                 person = cv2.resize(person,(self.resize_width, self.resize_height))
-                cv2.imwrite(os.path.join(self.bbox_output, det_index[0][:-4],str(j)+'.jpg'), person)
                 person = Image.fromarray(cv2.cvtColor(person, cv2.COLOR_BGR2RGB))
 
                 person = self.transform2(person)
-                # person -= np.array([[[90.0, 98.0, 102.0]]])
                 buffer[i][j][:] = person
 
-            # print("dist_i", dist[i])
-            # print("dist_i", dist[i,:dist_num[i],:dist_num[i]])
-            #
-            # # dist_index = np.argsort(dist[i], axis=1)
-            # dist_index = np.argsort(dist[i,:dist_num[i],:dist_num[i]], axis=1)
-            # print(dist_index.shape)
-            # print(dist_num[i])
-            # for id in range(dist_num[i]):
+            dist_index = np.argsort(dist[i], axis=1)
+            # for id in range(12):
             #     frame_show = frame
-            #     pt_index = dist_index[id][:dist_num[i]][:3]
-            #     print("pt_index", pt_index)
+            #     pt_index = dist_index[id][:3]
             #     for jd in pt_index:
-            #         buffer_bbox = [int(x) for x in det_index[(2+jd*6):(2+jd*6)+4]]
-            #         print("buffer_bbox_jd", buffer_bbox)
+            #         buffer_bbox = [int(x) for x in det_lines[jd][id+1].split(" ")]
             #         frame_show = cv2.rectangle(frame_show, (buffer_bbox[0], buffer_bbox[1]), \
-            #         (buffer_bbox[0]+buffer_bbox[2], buffer_bbox[1]+buffer_bbox[3]),(0,0,255),2)
-            #     buffer_bbox = [int(x) for x in det_index[(2+id*6):(2+id*6)+4]]
-            #     print("buffer_bbox", buffer_bbox)
-            #     frame_show = cv2.rectangle(frame_show, (buffer_bbox[0], buffer_bbox[1]), \
-            #     (buffer_bbox[0]+buffer_bbox[2], buffer_bbox[1]+buffer_bbox[3]),(0,255,0),2)
-            #     cv2.imshow("id", frame_show)
+            #         (buffer_bbox[0]+buffer_bbox[2], buffer_bbox[1]+buffer_bbox[3]),(0,255,0),2)
+            #     cv2.imshow("id", frame)
             #     cv2.waitKey(0)
 
-            # print(dist_index[:, :3])
-            # dist_des, dist_index = dist[i].sort(1,descending=True)
-            dist_index = np.argsort(dist[i, :dist_num[i], :dist_num[i]], axis=1)
-            # print(dist_num[i])
-            for l in np.arange(dist_num[i]):
+            for l in np.arange(12):
                 dist[i][l][dist_index[:, 3:][l]] = 0
                 dist[i][l][dist_index[:, :3][l]] = 1/3
-            # dist[i] += np.eye(12)*1/3
-        #     print("dist_out", dist[i])
-        # print("dist", dist[0])
+            # print(dist[i])
 
-        return buffer, dist, dist_num
-        # return buffer.transpose((0, 1, 4, 2, 3)), dist
+        return buffer, dist
 
     def crop(self, buffer, buffer_bbox, clip_len, crop_size):
         # randomly select time index for temporal jittering

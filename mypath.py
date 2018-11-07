@@ -27,7 +27,8 @@ class Path(object):
             return root_dir, label_dir, bbox_output_dir
         elif database == 'volleyball':
             root_dir = '/data/dataset/volleyball/videos/'
-            bbox_output_dir = '/data/dataset/volleyball/volleyball-detections/'
+            # bbox_output_dir = '/data/dataset/volleyball/volleyball-detections/'
+            bbox_output_dir = '/data/dataset/volleyball/volleyball-extra/'
             return root_dir, bbox_output_dir
         else:
             print('Database {} not available.'.format(database))

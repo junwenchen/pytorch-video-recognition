@@ -144,22 +144,22 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             torch.backends.cudnn.benchmark=False
             # for inputs, bbox_inputs, labels, adjacent_matrix in tqdm(trainval_loaders[phase]):
             # for inputs, labels in tqdm(trainval_loaders[phase]):
-            for inputs, labels, dists, dist_num in tqdm(trainval_loaders[phase]):
+            for inputs, labels, dists in tqdm(trainval_loaders[phase]):
                 # move inputs and labels to the device the training is taking place on
                 inputs = Variable(inputs, requires_grad=True).to(device)
                 # bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
                 # adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
                 labels = Variable(labels).to(device)
                 dists = Variable(dists, requires_grad = True).to(device)
-                dist_num = Variable(dist_num).to(device)
+                # dist_num = Variable(dist_num).to(device)
                 optimizer.zero_grad()
                 if phase == 'train':
-                    outputs = model(inputs, dists, dist_num)
+                    outputs = model(inputs, dists)
                     # outputs = model(inputs, bbox_inputs, adjacent_matrix)
                 else:
                     with torch.no_grad():
                         # outputs = model(inputs, bbox_inputs, adjacent_matrix)
-                        outputs = model(inputs, dists, dist_num)
+                        outputs = model(inputs, dists)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
                 loss = criterion(outputs, labels)
