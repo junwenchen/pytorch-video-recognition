@@ -25,10 +25,14 @@ class Path(object):
             # root_dir = '/data/dataset/something-somthing-v2/20bn-something-something-v2-frames'
             # label_dir = '/data/dataset/something-somthing-v2/label/something-something-v2-'
             return root_dir, label_dir, bbox_output_dir
+        elif database == 'volleyball':
+            root_dir = '/data/dataset/volleyball/videos/'
+            bbox_output_dir = '/data/dataset/volleyball/volleyball-detections/'
+            return root_dir, bbox_output_dir
         else:
             print('Database {} not available.'.format(database))
             raise NotImplementedError
 
     @staticmethod
     def model_dir():
-        return '/path/to/Models/c3d-pretrained.pth'
+        return '/home/jc1088/Documents/opengit/volleyball/pytorch-classification/checkpoint/model_best.pth.tar'

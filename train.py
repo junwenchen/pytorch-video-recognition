@@ -114,10 +114,10 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
     writer = SummaryWriter(log_dir=log_dir)
 
     print('Training model on {} dataset...'.format(dataset))
-    train_dataloader = DataLoader(VolleyballDataset(dataset=dataset, split='train',clip_len=16), batch_size=1, shuffle=True, \
+    train_dataloader = DataLoader(VolleyballDataset(dataset=dataset, split='train',clip_len=16), batch_size=4, shuffle=True, \
                                   num_workers=0)
-    val_dataloader   = DataLoader(VolleyballDataset(dataset=dataset, split='val',  clip_len=16), batch_size=1, num_workers=0)
-    test_dataloader  = DataLoader(VolleyballDataset(dataset=dataset, split='test', clip_len=16), batch_size=1, num_workers=0)
+    val_dataloader   = DataLoader(VolleyballDataset(dataset=dataset, split='val',  clip_len=16), batch_size=4, num_workers=0)
+    test_dataloader  = DataLoader(VolleyballDataset(dataset=dataset, split='test', clip_len=16), batch_size=4, num_workers=0)
 
     trainval_loaders = {'train': train_dataloader, 'val': val_dataloader}
     trainval_sizes = {x: len(trainval_loaders[x].dataset) for x in ['train', 'val']}
@@ -144,21 +144,22 @@ def train_model(dataset=dataset, save_dir=save_dir, num_classes=num_classes, lr=
             torch.backends.cudnn.benchmark=False
             # for inputs, bbox_inputs, labels, adjacent_matrix in tqdm(trainval_loaders[phase]):
             # for inputs, labels in tqdm(trainval_loaders[phase]):
-            for inputs, labels, dists in tqdm(trainval_loaders[phase]):
+            for inputs, labels, dists, dist_num in tqdm(trainval_loaders[phase]):
                 # move inputs and labels to the device the training is taking place on
                 inputs = Variable(inputs, requires_grad=True).to(device)
                 # bbox_inputs = Variable(bbox_inputs, requires_grad=True).to(device)
                 # adjacent_matrix = Variable(adjacent_matrix, requires_grad=True).to(device)
                 labels = Variable(labels).to(device)
                 dists = Variable(dists, requires_grad = True).to(device)
+                dist_num = Variable(dist_num).to(device)
                 optimizer.zero_grad()
                 if phase == 'train':
-                    outputs = model(inputs, dists)
+                    outputs = model(inputs, dists, dist_num)
                     # outputs = model(inputs, bbox_inputs, adjacent_matrix)
                 else:
                     with torch.no_grad():
                         # outputs = model(inputs, bbox_inputs, adjacent_matrix)
-                        outputs = model(inputs)
+                        outputs = model(inputs, dists, dist_num)
                 probs = nn.Softmax(dim=1)(outputs)
                 preds = torch.max(probs, 1)[1]
                 loss = criterion(outputs, labels)

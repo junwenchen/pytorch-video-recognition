@@ -133,16 +133,17 @@ class R2DNet(nn.Module):
         self.embedding_dim = embedding_dim
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, 1)
         self.avg_pool = nn.AdaptiveAvgPool1d(1)
-        self.convLinear = nn.Conv1d(in_channels=256, out_channels=group_num_classes, kernel_size=1, \
+        self.convLinear = nn.Conv1d(in_channels=512, out_channels=group_num_classes, kernel_size=1, \
         padding=0, stride=1, dilation=1, bias=False)
 
         # self.hidden = (torch.autograd.Variable(torch.zeros(1,21,self.hidden_dim)).cuda(), \
         # torch.autograd.Variable(torch.zeros(1,21,self.hidden_dim)).cuda())
         self.linear = nn.Linear(256, group_num_classes)
 
-    def forward(self, x, dist):
+    def forward(self, x, dist, dist_num):
         [N, T, M, C, H, W] = x.shape
-        base_out = self.base_model(x.view(-1, C, H, W)).view(N*T, M, -1)
+        # base_out = self.base_model(x.view(-1, C, H, W)).view(N*T, M, -1)
+
         # print(np.where(base_out>100))
         # base_out_c.detach()
         # base_out_c.no_grad()
@@ -170,28 +171,57 @@ class R2DNet(nn.Module):
         #     dist[i] = self.normalize_digraph(dist[i].unsqueeze(0).cuda())
         # # print("dist",dist[0])
 
-        with torch.no_grad():
-            base_out = Variable(base_out)
+        # with torch.no_grad():
+        #     base_out = Variable(base_out)
+
+        # print("base_out", base_out.shape)
+        gcn_out = torch.zeros(N*T, 8).cuda()
+        dist_num = dist_num.view(-1)
+        # print("dist_num", dist_num)
+        dist = dist.view(-1, 12, 12)
+        x = x.view(-1, M, C, H, W)
+        for i in range(N*T):
+            # print("dist_num", dist_num.view(-1)[i])
+            base_out = self.base_model(x[i, :dist_num[i]])
+            with torch.no_grad():
+                base_out = Variable(base_out)
+            # print(base_out[i][:dist_num.view(-1)[i]].unsqueeze(0).shape)
+            node1 = self.conv1da(base_out[:dist_num.view(-1)[i]].unsqueeze(0).permute(0,2,1).contiguous())
+            # print("before", node1)
+            # print(dist[i,:dist_num[i],:dist_num[i]].unsqueeze(0).shape)
+            # print(node1.permute(0,2,1).contiguous().shape)
+            node1 = torch.bmm(dist[i, :dist_num[i], :dist_num[i]].unsqueeze(0).float(), \
+            node1.permute(0,2,1).contiguous())
+            # print("bmm", node1)
+            node1 = F.relu(node1)
+            nodeLinear = self.convLinear(node1.permute(0,2,1).contiguous())
+            # print("nodeLinear", nodeLinear)
+            pooled_feat = self.pool(nodeLinear).squeeze(2)
+            # print("pooled_feat", pooled_feat.shape)
+            gcn_out[i] = pooled_feat
+
+        group_out = self.avg_pool(gcn_out.view(N, -1, T))
 
         #normalize
-        # print(dist.squeeze(0)[::2,:,:])
-        node1 = self.conv1da(base_out.permute(0,2,1).contiguous()).permute(0,2,1).contiguous()
-        node1 = torch.bmm(dist.squeeze(0)[::2,:,:].float(), node1).permute(0,2,1).contiguous()
-        node1 = F.relu(node1)
-        node1 = self.conv1db(node1).permute(0,2,1).contiguous()
-        node1 = torch.bmm(dist.squeeze(0)[::2,:,:].float(), node1).permute(0,2,1).contiguous()
-        node1 = F.relu(node1)
+        # node1 = self.conv1da(base_out.permute(0,2,1).contiguous()).permute(0,2,1).contiguous()
+        # node1 = torch.bmm(dist.squeeze(0)[::2,:,:].float(), node1).permute(0,2,1).contiguous()
+        # node1 = F.relu(node1)
+        # node2 = self.conv1db(node1).permute(0,2,1).contiguous()
+        # node2 = torch.bmm(dist.squeeze(0)[::2,:,:].float(), node2).permute(0,2,1).contiguous()
+        # node2 = F.relu(node2)
+        #
+        # nodeLinear = self.convLinear(node2)
+        #
+        # pooled_feat = self.pool(nodeLinear).squeeze(2).view(N, T, -1)
+        # group_out = self.avg_pool(pooled_feat.view(N,-1,T))
 
-        nodeLinear = self.convLinear(node1)
-
-        pooled_feat = self.pool(nodeLinear).squeeze(2).view(N, T, -1)
-        group_out = self.avg_pool(pooled_feat.view(N,-1,T))
-        # group_out, _ = self.lstm(pooled_feat)
-        # group_out = pooled_feat
-        # print("group_out", group_out.squeeze(2).squeeze(0))
-        # group_cls_out = self.linear(group_out[:,-1,:])
-        # group_cls_out = self.linear(group_out.squeeze(2))
-
+        # print("gcn", gcn_out.shape)
+        # group_out, _ = self.lstm(gcn_out.view(N, T, -1))
+        # # print("group_out", group_out.squeeze(2).squeeze(0))
+        # # group_cls_out = self.linear(group_out[:,-1,:])
+        # # group_cls_out = self.linear(group_out.squeeze(2))
+        # print(group_out.shape)
+        # return group_out[:,-1,:]
         return group_out.squeeze(2)
 
     def normalize_digraph(self, A):
@@ -218,8 +248,8 @@ class R2DClassifier(nn.Module):
         if pretrained:
             self.__load_pretrained_weights()
 
-    def forward(self, x, dist):
-        x = self.res2d(x, dist)
+    def forward(self, x, dist, dist_num):
+        x = self.res2d(x, dist, dist_num)
         return x
 
     def __load_pretrained_weights(self):
